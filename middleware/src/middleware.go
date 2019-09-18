@@ -147,21 +147,35 @@ func (middleware *Middleware) Start() <-chan []byte {
 
 // ResyncBitcoin returns a ErrorResponse struct in response to a rpcserver request
 func (middleware *Middleware) ResyncBitcoin() rpcmessages.ErrorResponse {
-	log.Println("executing full bitcoin resync via the config script")
+	log.Println("executing full bitcoin resync via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"bitcoind", "resync"})
+
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
 // ReindexBitcoin returns a ErrorResponse struct in response to a rpcserver request
 func (middleware *Middleware) ReindexBitcoin() rpcmessages.ErrorResponse {
-	log.Println("executing full bitcoin resync via the config script")
+	log.Println("executing full bitcoin resync via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"bitcoind", "reindex"})
+
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -197,16 +211,39 @@ func (middleware *Middleware) DummyAdminPassword() string {
 func (middleware *Middleware) MountFlashdrive() rpcmessages.ErrorResponse {
 	log.Println("Executing a USB flashdrive check via the cmd script")
 	outCheck, err := middleware.runBBBCmdScript([]string{"flashdrive", "check"})
+
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(outCheck), Code: err.Error()}
+		errorCode := handleBBBScriptError(outCheck, err, []rpcmessages.ErrorCode{
+			rpcmessages.ErrorFlashdriveCheckMultiple,
+			rpcmessages.ErrorFlashdriveCheckNone,
+		})
+
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(outCheck, "\n"),
+			Code:    errorCode,
+		}
 	}
-	flashDriveName := strings.TrimSuffix(string(outCheck), "\n")
+
+	// `bbb-cmd.sh flashdrive check` prints only the flashdrive name, if no error occurs
+	flashDriveName := outCheck[0]
 
 	log.Println("Executing a USB flashdrive mount via the cmd script")
 	outMount, err := middleware.runBBBCmdScript([]string{"flashdrive", "mount", flashDriveName})
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(outMount), Code: err.Error()}
+		errorCode := handleBBBScriptError(outMount, err, []rpcmessages.ErrorCode{
+			rpcmessages.ErrorFlashdriveMountNotFound,
+			rpcmessages.ErrorFlashdriveMountNotSupported,
+			rpcmessages.ErrorFlashdriveMountNotUnique,
+		})
+
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(outMount, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -214,9 +251,19 @@ func (middleware *Middleware) MountFlashdrive() rpcmessages.ErrorResponse {
 func (middleware *Middleware) UnmountFlashdrive() rpcmessages.ErrorResponse {
 	log.Println("Executing a USB flashdrive unmount via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"flashdrive", "unmount"})
+
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, []rpcmessages.ErrorCode{
+			rpcmessages.ErrorFlashdriveUnmountNotMounted,
+		})
+
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -224,9 +271,19 @@ func (middleware *Middleware) UnmountFlashdrive() rpcmessages.ErrorResponse {
 func (middleware *Middleware) BackupSysconfig() rpcmessages.ErrorResponse {
 	log.Println("Executing a backup of the system config via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"backup", "sysconfig"})
+
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, []rpcmessages.ErrorCode{
+			rpcmessages.ErrorBackupSysconfigNotAMountpoint,
+		})
+
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -234,9 +291,16 @@ func (middleware *Middleware) BackupSysconfig() rpcmessages.ErrorResponse {
 func (middleware *Middleware) BackupHSMSecret() rpcmessages.ErrorResponse {
 	log.Println("Executing a backup of the c-lightning hsm_secret via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"backup", "hsm_secret"})
+
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -244,9 +308,19 @@ func (middleware *Middleware) BackupHSMSecret() rpcmessages.ErrorResponse {
 func (middleware *Middleware) RestoreSysconfig() rpcmessages.ErrorResponse {
 	log.Println("Executing a restore of the system config via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"restore", "sysconfig"})
+
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, []rpcmessages.ErrorCode{
+			rpcmessages.ErrorRestoreSysconfigBackupNotFound,
+		})
+
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -254,9 +328,16 @@ func (middleware *Middleware) RestoreSysconfig() rpcmessages.ErrorResponse {
 func (middleware *Middleware) RestoreHSMSecret() rpcmessages.ErrorResponse {
 	log.Println("Executing a restore of the c-lightning hsm_secret via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"restore", "hsm_secret"})
+
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -286,7 +367,11 @@ func (middleware *Middleware) UserAuthenticate(args rpcmessages.UserAuthenticate
 		}
 	}
 
-	return rpcmessages.ErrorResponse{Success: false, Message: "authentication unsuccessful"}
+	return rpcmessages.ErrorResponse{
+		Success: false,
+		Message: "authentication unsuccessful",
+		Code:    rpcmessages.ErrorDummyAuthenticationNotSuccessful,
+	}
 }
 
 // UserChangePassword returns an ErrorResponse struct in response to a rpcserver request
@@ -304,7 +389,11 @@ func (middleware *Middleware) UserChangePassword(args rpcmessages.UserChangePass
 		return rpcmessages.ErrorResponse{Success: true}
 	}
 
-	return rpcmessages.ErrorResponse{Success: false, Message: "password change unsuccessful (too short)"}
+	return rpcmessages.ErrorResponse{
+		Success: false,
+		Message: "password change unsuccessful (too short)",
+		Code:    rpcmessages.ErrorDummyPasswordTooShort,
+	}
 }
 
 // SetHostname sets the systems hostname
@@ -316,7 +405,15 @@ func (middleware *Middleware) SetHostname(args rpcmessages.SetHostnameArgs) rpcm
 	if r.MatchString(hostname) {
 		out, err := middleware.runBBBConfigScript([]string{"set", "hostname", hostname})
 		if err != nil {
-			return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+			errorCode := handleBBBScriptError(out, err, []rpcmessages.ErrorCode{
+				rpcmessages.ErrorSetHostnameInvalidValue,
+			})
+
+			return rpcmessages.ErrorResponse{
+				Success: false,
+				Message: strings.Join(out, "\n"),
+				Code:    errorCode,
+			}
 		}
 		return rpcmessages.ErrorResponse{Success: true}
 	}
@@ -325,23 +422,15 @@ func (middleware *Middleware) SetHostname(args rpcmessages.SetHostnameArgs) rpcm
 
 // GetHostname returns a the systems hostname in a GetHostnameResponse
 func (middleware *Middleware) GetHostname() rpcmessages.GetHostnameResponse {
-	log.Println("Getting the hostname via the config script")
-	out, err := middleware.runBBBConfigScript([]string{"get", "hostname"})
-	if err != nil {
-		return rpcmessages.GetHostnameResponse{
-			ErrorResponse: &rpcmessages.ErrorResponse{
-				Success: false,
-				Message: string(out),
-				Code:    err.Error(),
-			},
-		}
-	}
+	log.Println("Getting the hostname from redis")
 
-	hostname := strings.TrimSuffix(string(out), "\n")
+	// TODO: Implement get hostname from redis
+	// TODO: define error codes for this
 	return rpcmessages.GetHostnameResponse{
-		Hostname: hostname,
 		ErrorResponse: &rpcmessages.ErrorResponse{
-			Success: true,
+			Success: false,
+			Message: "GetHostname is not implemnted",
+			Code:    rpcmessages.ErrorUnhandled,
 		},
 	}
 }
@@ -353,8 +442,15 @@ func (middleware *Middleware) EnableTor(toggleAction rpcmessages.ToggleSetting) 
 
 	out, err := middleware.runBBBConfigScript([]string{string(toggleAction), "tor"})
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -365,8 +461,15 @@ func (middleware *Middleware) EnableTorMiddleware(toggleAction rpcmessages.Toggl
 
 	out, err := middleware.runBBBConfigScript([]string{string(toggleAction), "tor_bbbmiddleware"})
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -377,8 +480,15 @@ func (middleware *Middleware) EnableTorElectrs(toggleAction rpcmessages.ToggleSe
 
 	out, err := middleware.runBBBConfigScript([]string{string(toggleAction), "tor_electrs"})
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -389,8 +499,14 @@ func (middleware *Middleware) EnableTorSSH(toggleAction rpcmessages.ToggleSettin
 
 	out, err := middleware.runBBBConfigScript([]string{string(toggleAction), "tor_ssh"})
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -401,7 +517,16 @@ func (middleware *Middleware) EnableClearnetIBD(toggleAction rpcmessages.ToggleS
 
 	out, err := middleware.runBBBConfigScript([]string{string(toggleAction), "bitcoin_ibd_clearnet"})
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, []rpcmessages.ErrorCode{
+			rpcmessages.ErrorSetNeedsTwoArguments,
+			rpcmessages.ErrorEnableClearnetIBDTorAlreadyDisabled,
+		})
+
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
 	return rpcmessages.ErrorResponse{Success: true}
 }
@@ -411,9 +536,16 @@ func (middleware *Middleware) EnableClearnetIBD(toggleAction rpcmessages.ToggleS
 func (middleware *Middleware) ShutdownBase() rpcmessages.ErrorResponse {
 	log.Println("shutting down the Base via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"base", "shutdown"})
+
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -422,9 +554,16 @@ func (middleware *Middleware) ShutdownBase() rpcmessages.ErrorResponse {
 func (middleware *Middleware) RebootBase() rpcmessages.ErrorResponse {
 	log.Println("rebooting the Base via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"base", "reboot"})
+
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -438,7 +577,7 @@ func (middleware *Middleware) GetBaseVersion() rpcmessages.GetBaseVersionRespons
 			ErrorResponse: &rpcmessages.ErrorResponse{
 				Success: false,
 				Message: fmt.Errorf("could not get %s from redis: %s", baseVersionKey, err.Error()).Error(),
-				Code:    "PLACEHOLDER", // TODO(0xb10c): replace with ErrorCode once defined.
+				Code:    rpcmessages.ErrorRedisError,
 			},
 		}
 	}
@@ -457,8 +596,14 @@ func (middleware *Middleware) EnableRootLogin(toggleAction rpcmessages.ToggleSet
 
 	out, err := middleware.runBBBConfigScript([]string{string(toggleAction), "root_pwlogin"})
 	if err != nil {
-		return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+		errorCode := handleBBBScriptError(out, err, nil)
+		return rpcmessages.ErrorResponse{
+			Success: false,
+			Message: strings.Join(out, "\n"),
+			Code:    errorCode,
+		}
 	}
+
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
@@ -472,37 +617,100 @@ func (middleware *Middleware) SetRootPassword(args rpcmessages.SetRootPasswordAr
 	// len([]rune("₿")) = 1
 	if len([]rune(password)) >= 8 {
 		out, err := middleware.runBBBConfigScript([]string{"set", "root_pw", password})
+
 		if err != nil {
-			return rpcmessages.ErrorResponse{Success: false, Message: string(out), Code: err.Error()}
+			errorCode := handleBBBScriptError(out, err, []rpcmessages.ErrorCode{
+				rpcmessages.ErrorSetNeedsTwoArguments,
+			})
+
+			return rpcmessages.ErrorResponse{
+				Success: false,
+				Message: strings.Join(out, "\n"),
+				Code:    errorCode,
+			}
 		}
+
 		return rpcmessages.ErrorResponse{Success: true}
 	}
-	return rpcmessages.ErrorResponse{Success: false, Message: "invalid password"}
+
+	return rpcmessages.ErrorResponse{
+		Success: false,
+		Message: "The password has to be at least 8 chars. An unicode char is counted as one.",
+		Code:    rpcmessages.ErrorSetRootPasswordToShort,
+	}
 }
 
 // runBBBCmdScript runs the bbb-cmd.sh script.
 // The script executes commands like for example mounting a USB drive, doing a backup and copying files.
-func (middleware *Middleware) runBBBCmdScript(args []string) (out []byte, err error) {
-	script := middleware.environment.GetBBBCmdScript()
-	cmdAsString := script + " " + strings.Join(args, " ")
-	out, err = exec.Command(script, args...).Output()
-	if err != nil {
-		// no error handling here, only logging.
-		log.Printf("Error: The command '%s' exited with the output '%v' and error '%s'.\n", cmdAsString, string(out), err.Error())
-	}
+func (middleware *Middleware) runBBBCmdScript(args []string) (outputLines []string, err error) {
+	outputLines, err = runCommand(middleware.environment.GetBBBCmdScript(), args)
 	return
 }
 
 // runBBBConfigScript runs the bbb-config.sh script.
 // The script changes the system configuration in redis by setting or unsetting the appropriate keys.
 // If necessary the affected services are restarted.
-func (middleware *Middleware) runBBBConfigScript(args []string) (out []byte, err error) {
-	script := middleware.environment.GetBBBConfigScript()
-	cmdAsString := script + " " + strings.Join(args, " ")
-	out, err = exec.Command(script, args...).Output()
-	if err != nil {
-		// no error handling here, only logging.
-		log.Printf("Error: The command '%s' exited with the output '%v' and error '%s'.\n", cmdAsString, string(out), err.Error())
-	}
+func (middleware *Middleware) runBBBConfigScript(args []string) (outputLines []string, err error) {
+	outputLines, err = runCommand(middleware.environment.GetBBBConfigScript(), args)
 	return
+}
+
+// runCommand runs the passed command and returns the combined stdout and stderr output.
+// If the command could not be run, err is not nil.
+func runCommand(command string, args []string) (combinedLines []string, err error) {
+	cmd := exec.Command(command, args...)
+	log.Printf("executing command: %s %s", command, strings.Join(args, " "))
+
+	rawstdoutStderr, err := cmd.CombinedOutput()
+	if err != nil {
+		// no error handling here, just logging
+		log.Printf("Error executing command '%s %s': '%s'", command, strings.Join(args, " "), err.Error())
+	}
+
+	combined := strings.TrimSuffix(string(rawstdoutStderr), "\n")
+	combinedLines = strings.Split(combined, "\n")
+	return combinedLines, err
+}
+
+func handleBBBScriptError(outputLines []string, err error, possibleErrors []rpcmessages.ErrorCode) rpcmessages.ErrorCode {
+	// There are two possible types of errors handled here:
+	// 1.   The script could not be found.
+	// 2.   Script exited with `exis status 1`:
+	// 	2.1. Script was not run as superuser. ErrorCode ErrorScriptNotSuperuser is expected as the last outputLine.
+	// 	2.2. CMD Script was not run with correct parameters. ErrorCode ErrorCmdScriptInvalidArg is expected as the last outputLine.
+	// 	2.3. Config Script was not run with correct parameters. ErrorCode ErrorConfigScriptInvalidArg is expected as the last outputLine.
+	// 	2.4. One of the `possibleErrors` is expected as the last outputLine.
+	// All other errors are unknow and not handled. ErrorUnhandled is returned as a last resort.
+
+	if strings.Contains(err.Error(), "no such file or directory") {
+		return rpcmessages.ErrorScriptNotFound
+
+	} else if err.Error() == "error status 1" {
+		if len(outputLines) == 0 {
+			log.Println("Error: no log lines provided before exit with error status 1.")
+			return rpcmessages.ErrorUnhandled
+		}
+		outputErrorCode := outputLines[len(outputLines)-1]
+
+		if outputErrorCode == string(rpcmessages.ErrorScriptNotSuperuser) {
+			return rpcmessages.ErrorScriptNotSuperuser
+		}
+
+		if outputErrorCode == string(rpcmessages.ErrorCmdScriptInvalidArg) {
+			return rpcmessages.ErrorCmdScriptInvalidArg
+		}
+
+		if outputErrorCode == string(rpcmessages.ErrorConfigScriptInvalidArg) {
+			return rpcmessages.ErrorConfigScriptInvalidArg
+		}
+
+		for _, possible := range possibleErrors {
+			if outputErrorCode == string(possible) {
+				return possible
+			}
+		}
+	}
+
+	log.Printf("Error: unhandled error '%s' with output '%s'", err.Error(), outputLines)
+	return rpcmessages.ErrorUnhandled
 }
