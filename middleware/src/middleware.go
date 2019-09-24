@@ -206,68 +206,29 @@ func (middleware *Middleware) DummyAdminPassword() string {
 	return middleware.dummyAdminPassword
 }
 
-// MountFlashdrive returns an ErrorResponse struct in a response to a rpcserver request
-func (middleware *Middleware) MountFlashdrive() rpcmessages.ErrorResponse {
-	log.Println("Executing a USB flashdrive check via the cmd script")
-	outCheck, err := middleware.runBBBCmdScript([]string{"flashdrive", "check"})
+// BackupSysconfig creates a backup of the system configuration onto a flashdrive.
+// 1. Check if one and only one valid flashdrive is plugged in
+// 2. Mount the flashdrive
+// 3. Backup the system configuration
+// 4. Unmount the flashdrive
+func (middleware *Middleware) BackupSysconfig() (response rpcmessages.ErrorResponse) {
 
-	if err != nil {
-		errorCode := handleBBBScriptError(outCheck, err, []rpcmessages.ErrorCode{
-			rpcmessages.ErrorFlashdriveCheckMultiple,
-			rpcmessages.ErrorFlashdriveCheckNone,
-		})
-
-		return rpcmessages.ErrorResponse{
-			Success: false,
-			Message: strings.Join(outCheck, "\n"),
-			Code:    errorCode,
-		}
+	response = middleware.mountFlashdrive()
+	if !response.Success {
+		return response
 	}
 
-	// `bbb-cmd.sh flashdrive check` prints only the flashdrive name, if no error occurs
-	flashDriveName := outCheck[0]
-
-	log.Println("Executing a USB flashdrive mount via the cmd script")
-	outMount, err := middleware.runBBBCmdScript([]string{"flashdrive", "mount", flashDriveName})
-	if err != nil {
-		errorCode := handleBBBScriptError(outMount, err, []rpcmessages.ErrorCode{
-			rpcmessages.ErrorFlashdriveMountNotFound,
-			rpcmessages.ErrorFlashdriveMountNotSupported,
-			rpcmessages.ErrorFlashdriveMountNotUnique,
-		})
-
-		return rpcmessages.ErrorResponse{
-			Success: false,
-			Message: strings.Join(outMount, "\n"),
-			Code:    errorCode,
+	// It's crucial that mounted Flashdrives get unmounted.
+	defer func() {
+		unmountResponse := middleware.unmountFlashdrive()
+		// In case the backing up the system configuration fails the error message should
+		// be preserved. If the backup was successful, but the unmouting fails, then the
+		// ErrorCode and message should be overwritten.
+		if response.Success {
+			response = unmountResponse // overrites the backup response
 		}
-	}
+	}()
 
-	return rpcmessages.ErrorResponse{Success: true}
-}
-
-// UnmountFlashdrive returns an ErrorResponse struct in a response to a rpcserver request
-func (middleware *Middleware) UnmountFlashdrive() rpcmessages.ErrorResponse {
-	log.Println("Executing a USB flashdrive unmount via the cmd script")
-	out, err := middleware.runBBBCmdScript([]string{"flashdrive", "unmount"})
-
-	if err != nil {
-		errorCode := handleBBBScriptError(out, err, []rpcmessages.ErrorCode{
-			rpcmessages.ErrorFlashdriveUnmountNotMounted,
-		})
-
-		return rpcmessages.ErrorResponse{
-			Success: false,
-			Message: strings.Join(out, "\n"),
-			Code:    errorCode,
-		}
-	}
-
-	return rpcmessages.ErrorResponse{Success: true}
-}
-
-// BackupSysconfig returns a ErrorResponse struct in response to a rpcserver request
-func (middleware *Middleware) BackupSysconfig() rpcmessages.ErrorResponse {
 	log.Println("Executing a backup of the system config via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"backup", "sysconfig"})
 
@@ -303,8 +264,28 @@ func (middleware *Middleware) BackupHSMSecret() rpcmessages.ErrorResponse {
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
-// RestoreSysconfig returns a ErrorResponse struct in response to a rpcserver request
-func (middleware *Middleware) RestoreSysconfig() rpcmessages.ErrorResponse {
+// RestoreSysconfig restores a backup of the system configuration from the flashdrive.
+// 1. Check if one and only one valid flashdrive is plugged in
+// 2. Mount the flashdrive
+// 3. Restore the system configuration (currently not choosable)
+// 4. Unmount the flashdrive
+func (middleware *Middleware) RestoreSysconfig() (response rpcmessages.ErrorResponse) {
+	response = middleware.mountFlashdrive()
+	if !response.Success {
+		return response
+	}
+
+	// It's crucial that mounted Flashdrives get unmounted.
+	defer func() {
+		unmountResponse := middleware.unmountFlashdrive()
+		// In case the restoring up the system configuration fails the error message should
+		// be preserved. If the backup was successful, but the unmouting fails, then the
+		// ErrorCode and message should be overwritten.
+		if response.Success {
+			response = unmountResponse // overrites the backup response
+		}
+	}()
+
 	log.Println("Executing a restore of the system config via the cmd script")
 	out, err := middleware.runBBBCmdScript([]string{"restore", "sysconfig"})
 
@@ -319,7 +300,6 @@ func (middleware *Middleware) RestoreSysconfig() rpcmessages.ErrorResponse {
 			Code:    errorCode,
 		}
 	}
-
 	return rpcmessages.ErrorResponse{Success: true}
 }
 
