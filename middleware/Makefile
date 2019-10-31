@@ -59,3 +59,11 @@ regtest-info:
 
 generate:
 	go generate ./...
+
+# regtest-connect-middleware:
+# 	export MOCKMODE=1 ;\
+# 	middleware -rpcport=18443 -rpcpassword=rpcpass -rpcuser=rpcuser -electrsport=60401 -lightning-rpc-path=integration_test/volumes/clightning1/lightning-rpc -bbbconfigscript=../armbian/base/scripts/bbb-config.sh -bbbcmdscript=../armbian/base/scripts/bbb-cmd.sh
+
+regtest-connect-middleware:
+	export MOCKMODE=1 ;\
+	middleware -rpcport=18443 -rpcpassword=rpcpass -rpcuser=rpcuser -electrsport=60401 -lightning-rpc-path=integration_test/volumes/clightning1/lightning-rpc
