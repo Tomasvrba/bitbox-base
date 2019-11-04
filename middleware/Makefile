@@ -55,3 +55,7 @@ regtest-info:
 
 generate:
 	go generate ./...
+
+regtest-connect-middleware:
+	export MOCKMODE=1 ;\
+	middleware -electrsport=60401 -redismock=true

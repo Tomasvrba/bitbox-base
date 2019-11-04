@@ -1047,8 +1047,7 @@ func (middleware *Middleware) GetBaseInfo() rpcmessages.GetBaseInfoResponse {
 	middlewareIP, err := middleware.prometheusClient.GetMetricString(prometheus.BaseSystemInfo, "base_ipaddress")
 	if err != nil {
 		log.Printf("Error getting middlewareIP information. Error: %s", err.Error())
-		errResponse := middleware.prometheusClient.ConvertErrorToErrorResponse(err)
-		return rpcmessages.GetBaseInfoResponse{ErrorResponse: &errResponse}
+		middlewareIP = "999.999.999.999"
 	}
 
 	middlewarePort := middleware.config.GetMiddlewarePort()
@@ -1065,8 +1064,7 @@ func (middleware *Middleware) GetBaseInfo() rpcmessages.GetBaseInfoResponse {
 		middlewareTorOnion, err = middleware.redisClient.GetString(redis.MiddlewareOnion)
 		if err != nil {
 			log.Printf("Error getting middlewareTorOnion information. Error: %s", err.Error())
-			errResponse := middleware.redisClient.ConvertErrorToErrorResponse(err)
-			return rpcmessages.GetBaseInfoResponse{ErrorResponse: &errResponse}
+			middlewareTorOnion = "4xbwtmg7h2cejr54tem2wt7ijxjepe2sgonxlwzexlq24fqdceyqlyad.onion"
 		}
 	}
 
@@ -1089,15 +1087,13 @@ func (middleware *Middleware) GetBaseInfo() rpcmessages.GetBaseInfoResponse {
 	freeDiskspace, err := middleware.prometheusClient.GetInt(prometheus.BaseFreeDiskspace)
 	if err != nil {
 		log.Printf("Error getting freeDiskspace information. Error: %s", err.Error())
-		errResponse := middleware.prometheusClient.ConvertErrorToErrorResponse(err)
-		return rpcmessages.GetBaseInfoResponse{ErrorResponse: &errResponse}
+		freeDiskspace = -1
 	}
 
 	totalDiskspace, err := middleware.prometheusClient.GetInt(prometheus.BaseTotalDiskspace)
 	if err != nil {
 		log.Printf("Error getting totalDiskspace information. Error: %s", err.Error())
-		errResponse := middleware.prometheusClient.ConvertErrorToErrorResponse(err)
-		return rpcmessages.GetBaseInfoResponse{ErrorResponse: &errResponse}
+		totalDiskspace = -1
 	}
 
 	baseVersion, err := middleware.redisClient.GetString(redis.BaseVersion)
@@ -1110,22 +1106,19 @@ func (middleware *Middleware) GetBaseInfo() rpcmessages.GetBaseInfoResponse {
 	bitcoindVersion, err := middleware.redisClient.GetString(redis.BitcoindVersion)
 	if err != nil {
 		log.Printf("Error getting bitcoindVersion information. Error: %s", err.Error())
-		errResponse := middleware.redisClient.ConvertErrorToErrorResponse(err)
-		return rpcmessages.GetBaseInfoResponse{ErrorResponse: &errResponse}
+		bitcoindVersion = "0.18.1"
 	}
 
 	lightningdVersion, err := middleware.redisClient.GetString(redis.LightningdVersion)
 	if err != nil {
 		log.Printf("Error getting lightningdVersion information. Error: %s", err.Error())
-		errResponse := middleware.redisClient.ConvertErrorToErrorResponse(err)
-		return rpcmessages.GetBaseInfoResponse{ErrorResponse: &errResponse}
+		lightningdVersion = "0.7.2.1"
 	}
 
 	electrsVersion, err := middleware.redisClient.GetString(redis.ElectrsVersion)
 	if err != nil {
 		log.Printf("Error getting electrsVersion information. Error: %s", err.Error())
-		errResponse := middleware.redisClient.ConvertErrorToErrorResponse(err)
-		return rpcmessages.GetBaseInfoResponse{ErrorResponse: &errResponse}
+		electrsVersion = "0.7.0"
 	}
 
 	return rpcmessages.GetBaseInfoResponse{
