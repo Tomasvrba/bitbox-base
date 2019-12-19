@@ -8,7 +8,6 @@ import (
 	"log"
 	"os/exec"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -184,7 +183,7 @@ func (middleware *Middleware) hsmHeartbeatLoop() {
 		err := middleware.hsmHeartbeat()
 		if err != nil {
 			log.Printf("Warning while sending a HSM heartbeat: %s\n", err)
-			time.Sleep(time.Second)
+			time.Sleep(5 * time.Second)
 			continue
 		}
 		// Send a heartbeat every 5 seconds. The HSM watchdog's timeout is 60 seconds
@@ -193,31 +192,81 @@ func (middleware *Middleware) hsmHeartbeatLoop() {
 }
 
 func (middleware *Middleware) hsmHeartbeat() error {
-	stateCode, err := middleware.redisClient.GetInt(redis.BaseStateCode)
-	if err != nil {
-		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_ERROR, messages.BitBoxBaseHeartbeatRequest_REDIS_ERROR)
+	for index := 0; index < 3; index++ {
+		err := middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(index), messages.BitBoxBaseHeartbeatRequest_EMPTY)
 		if err != nil {
-			return fmt.Errorf("could not get the stateCode from Redis: %s", err)
+			return fmt.Errorf("received an error from the HSM: %w", err)
 		}
-	}
-
-	descriptionCodeString, err := middleware.redisClient.GetTopFromSortedSet(redis.BaseDescriptionCode)
-	if err != nil {
-		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_ERROR, messages.BitBoxBaseHeartbeatRequest_REDIS_ERROR)
+		time.Sleep(1 * time.Second)
+		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(index), messages.BitBoxBaseHeartbeatRequest_INITIAL_BLOCK_SYNC)
 		if err != nil {
-			return fmt.Errorf("could not get the hightest priority descriptionCode from Redis: %s", err)
+			return fmt.Errorf("received an error from the HSM: %w", err)
 		}
+		time.Sleep(1 * time.Second)
+		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(index), messages.BitBoxBaseHeartbeatRequest_DOWNLOAD_UPDATE)
+		if err != nil {
+			return fmt.Errorf("received an error from the HSM: %w", err)
+		}
+		time.Sleep(1 * time.Second)
+		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(index), messages.BitBoxBaseHeartbeatRequest_OUT_OF_DISK_SPACE)
+		if err != nil {
+			return fmt.Errorf("received an error from the HSM: %w", err)
+		}
+		time.Sleep(1 * time.Second)
+		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(index), messages.BitBoxBaseHeartbeatRequest_REDIS_ERROR)
+		if err != nil {
+			return fmt.Errorf("received an error from the HSM: %w", err)
+		}
+		time.Sleep(1 * time.Second)
+		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(index), messages.BitBoxBaseHeartbeatRequest_REBOOT)
+		if err != nil {
+			return fmt.Errorf("received an error from the HSM: %w", err)
+		}
+		time.Sleep(1 * time.Second)
+		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(index), messages.BitBoxBaseHeartbeatRequest_SHUTDOWN)
+		if err != nil {
+			return fmt.Errorf("received an error from the HSM: %w", err)
+		}
+		time.Sleep(1 * time.Second)
+		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(index), messages.BitBoxBaseHeartbeatRequest_UPDATE_FAILED)
+		if err != nil {
+			return fmt.Errorf("received an error from the HSM: %w", err)
+		}
+		time.Sleep(1 * time.Second)
+		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(index), messages.BitBoxBaseHeartbeatRequest_NO_NETWORK_CONNECTION)
+		if err != nil {
+			return fmt.Errorf("received an error from the HSM: %w", err)
+		}
+		time.Sleep(1 * time.Second)
 	}
+	// stateCode, err := middleware.redisClient.GetInt(redis.BaseStateCode)
+	// if err != nil {
+	// 	err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_ERROR, messages.BitBoxBaseHeartbeatRequest_REDIS_ERROR)
+	// 	return err
+	// }
 
-	descriptionCode, err := strconv.Atoi(descriptionCodeString)
-	if err != nil {
-		return fmt.Errorf("could not convert the descriptionCode from Redis %q to a string: %s", descriptionCodeString, err)
-	}
+	// descriptionCodeString, err := middleware.redisClient.GetTopFromSortedSet(redis.BaseDescriptionCode)
+	// if err != nil {
+	// 	err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_ERROR, messages.BitBoxBaseHeartbeatRequest_REDIS_ERROR)
+	// 	if err != nil {
+	// 		return fmt.Errorf("could not get the hightest priority descriptionCode from Redis: %s", err)
+	// 	}
+	// }
 
-	err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(stateCode), messages.BitBoxBaseHeartbeatRequest_DescriptionCode(descriptionCode))
-	if err != nil {
-		return fmt.Errorf("received an error from the HSM: %w", err)
-	}
+	// descriptionCode, err := strconv.Atoi(descriptionCodeString)
+	// if err != nil {
+	// 	return fmt.Errorf("could not convert the descriptionCode from Redis %q to a string: %s", descriptionCodeString, err)
+	// }
+
+	// fmt.Println("\nstateCode: ", stateCode)
+	// fmt.Println("descriptionCode: ", descriptionCode)
+	// fmt.Println("messages.BitBoxBaseHeartbeatRequest_StateCode(stateCode): ", messages.BitBoxBaseHeartbeatRequest_StateCode(stateCode))
+	// fmt.Println("messages.BitBoxBaseHeartbeatRequest_DescriptionCode(descriptionCode): ", messages.BitBoxBaseHeartbeatRequest_DescriptionCode(descriptionCode))
+
+	// err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_StateCode(stateCode), messages.BitBoxBaseHeartbeatRequest_DescriptionCode(descriptionCode))
+	// if err != nil {
+	// 	return fmt.Errorf("received an error from the HSM: %w", err)
+	// }
 
 	return nil
 }
@@ -764,7 +813,7 @@ func (middleware *Middleware) ShutdownBase() rpcmessages.ErrorResponse {
 	}
 
 	go func(delay time.Duration) {
-		// This logtag lets the Supervisor know that the Middleware initiated a reboot
+		// This logtag lets the Supervisor know that the Middleware initiated a shutdown
 		log.Println(logtags.LogTagMWShutdown)
 		time.Sleep(delay)
 		cmd := exec.Command("shutdown", "now")

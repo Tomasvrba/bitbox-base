@@ -297,7 +297,7 @@ func (s *Supervisor) handleBitcoindIBD(event watcher.Event) error {
 	}
 
 	if wasActive == 1 && isActive == 0 { // IBD finished
-		log.Println("IBD finished: unsetting bitcoind_idb.")
+		log.Println("IBD finished: unsetting bitcoind_ibd.")
 		err := s.disableBaseIBDState()
 		if err != nil {
 			return fmt.Errorf("Handling trigger %q: %s", t.String(), err.Error())
