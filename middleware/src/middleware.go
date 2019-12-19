@@ -184,7 +184,7 @@ func (middleware *Middleware) hsmHeartbeatLoop() {
 		err := middleware.hsmHeartbeat()
 		if err != nil {
 			log.Printf("Warning while sending a HSM heartbeat: %s\n", err)
-			time.Sleep(time.Second)
+			time.Sleep(5 * time.Second)
 			continue
 		}
 		// Send a heartbeat every 5 seconds. The HSM watchdog's timeout is 60 seconds
@@ -196,9 +196,7 @@ func (middleware *Middleware) hsmHeartbeat() error {
 	stateCode, err := middleware.redisClient.GetInt(redis.BaseStateCode)
 	if err != nil {
 		err = middleware.hsmFirmware.BitBoxBaseHeartbeat(messages.BitBoxBaseHeartbeatRequest_ERROR, messages.BitBoxBaseHeartbeatRequest_REDIS_ERROR)
-		if err != nil {
-			return fmt.Errorf("could not get the stateCode from Redis: %s", err)
-		}
+		return err
 	}
 
 	descriptionCodeString, err := middleware.redisClient.GetTopFromSortedSet(redis.BaseDescriptionCode)
@@ -764,7 +762,7 @@ func (middleware *Middleware) ShutdownBase() rpcmessages.ErrorResponse {
 	}
 
 	go func(delay time.Duration) {
-		// This logtag lets the Supervisor know that the Middleware initiated a reboot
+		// This logtag lets the Supervisor know that the Middleware initiated a shutdown
 		log.Println(logtags.LogTagMWShutdown)
 		time.Sleep(delay)
 		cmd := exec.Command("shutdown", "now")
